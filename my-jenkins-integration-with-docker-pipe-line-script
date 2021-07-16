@@ -1,0 +1,38 @@
+//using pipe line script for build the image and push to dockerhub
+node 
+{  //starting node
+def buildNumber = BUILD_NUMBER  //global variable--> it will take build number 
+// 1st-stage download the code from git hub
+stage ("Git clone") // stage-1
+{
+git url: 'https://github.com/vasu-newgithubacc/java-web-app-docker.git', branch: 'master'  //git repo url and master branch.
+}
+// 2nd-stage we are doing the build the package using maven tool
+stage ("Build the package")  //stage-2
+{
+def mavenHome = tool name: "maven",type: "maven"
+sh "${mavenHome}/bin/mvn clean package"
+}
+// 3rd-statge-Build the docker image using docker file
+stage ("Building the Docker image here")   // stage-3
+{
+sh "docker build -t vasudockerhubacc/java-web-app-docker:${buildNumber} ."
+}
+// stage-4 here we are doing the pushing the created image to dockerhub
+stage("docker login and pushing the image to dockerhub")
+{
+withCredentials([string(credentialsId: 'docker_hub_pwd', variable: 'docker_hub_pwd')]) 
+{
+sh "docker login -u vasudockerhubacc -p ${docker_hub_pwd}"     
+}
+sh "docker push vasudockerhubacc/java-web-app-docker:${buildNumber}"
+}
+stage ("deploying the application as a container in docker-dev-server") 
+{
+sshagent(['docker_dev_server_ssh']) 
+{
+sh "ssh -o StrictHostKeyChecking=no ubuntu@15.206.179.134 docker rm -f javawebappcontainer || true"  // rm the already runnig container 
+sh "ssh -o StrictHostKeyChecking=no ubuntu@15.206.179.134 docker run -d --name javawebappcontainer -p 8080:8080 vasudockerhubacc/java-web-app-docker:${buildNumber}"
+}
+}
+}   //node end tag
